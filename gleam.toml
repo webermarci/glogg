@@ -1,7 +1,7 @@
 name = "glogg"
 version = "1.0.0"
 description = "A simple, structured JSON logging library for Gleam that works across Erlang and JavaScript targets."
-licences = ["MIT"]
+licenses = ["MIT"]
 repository = { type = "github", user = "webermarci", repo = "glogg" }
 
 [dependencies]
