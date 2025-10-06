@@ -1,7 +1,7 @@
 import gleam/io
 import gleam/json.{type Json}
 import gleam/list
-import gleam/time/duration
+import gleam/time/duration.{type Duration}
 import gleam/time/timestamp
 
 pub opaque type Logger {
@@ -14,6 +14,7 @@ pub opaque type Logger {
 }
 
 pub type Level {
+  Trace
   Info
   Error
   Warn
@@ -22,6 +23,7 @@ pub type Level {
 
 pub opaque type Field {
   String(key: String, value: String)
+  StringList(key: String, value: List(String))
   Bool(key: String, value: Bool)
   Int(key: String, value: Int)
   Float(key: String, value: Float)
@@ -84,6 +86,11 @@ pub fn add_default_fields(logger: Logger, fields: List(Field)) -> Logger {
   )
 }
 
+/// Logs a message and fields at the `Trace` level.
+pub fn trace(logger: Logger, message: String, fields: List(Field)) {
+  log(logger, Trace, message, fields)
+}
+
 /// Logs a message and fields at the `Debug` level.
 pub fn debug(logger: Logger, message: String, fields: List(Field)) {
   log(logger, Debug, message, fields)
@@ -129,21 +136,33 @@ pub fn group(key: String, fields: List(Field)) -> Field {
   Group(key:, fields:)
 }
 
+/// Creates a duration field in miliseconds.
+pub fn duration_ms(key: String, duration: Duration) -> Field {
+  Float(key:, value: duration.to_seconds(duration) *. 1000.0)
+}
+
+/// Creates a stacktrace field capturing the current stack trace.
+pub fn stacktrace() -> Field {
+  StringList("stacktrace", capture_stacktrace())
+}
+
 fn level_to_int(level: Level) -> Int {
   case level {
-    Debug -> 0
-    Info -> 1
-    Warn -> 2
-    Error -> 3
+    Trace -> 0
+    Debug -> 1
+    Info -> 2
+    Warn -> 3
+    Error -> 4
   }
 }
 
 fn level_to_string(level: Level) -> String {
   case level {
-    Info -> "INFO"
-    Error -> "ERROR"
-    Warn -> "WARN"
+    Trace -> "TRACE"
     Debug -> "DEBUG"
+    Info -> "INFO"
+    Warn -> "WARN"
+    Error -> "ERROR"
   }
 }
 
@@ -194,6 +213,7 @@ fn fields_to_json(fields: List(Field)) -> List(#(String, Json)) {
   list.map(fields, fn(field) {
     case field {
       String(k, v) -> #(k, json.string(v))
+      StringList(k, v) -> #(k, json.array(v, json.string))
       Bool(k, v) -> #(k, json.bool(v))
       Int(k, v) -> #(k, json.int(v))
       Float(k, v) -> #(k, json.float(v))
@@ -201,3 +221,7 @@ fn fields_to_json(fields: List(Field)) -> List(#(String, Json)) {
     }
   })
 }
+
+@external(erlang, "glogg_ffi", "capture_stacktrace")
+@external(javascript, "./glogg_ffi.mjs", "captureStacktrace")
+pub fn capture_stacktrace() -> List(String)

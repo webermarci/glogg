@@ -42,3 +42,8 @@ pub fn serialization_test() {
     "\"group\":{\"embedded_string\":\"value\",\"embedded_bool\":true,\"embedded_int\":42,\"embedded_float\":3.14}",
   ))
 }
+
+pub fn stacktrace_test() {
+  glogg.capture_stacktrace()
+  |> should.not_equal([])
+}

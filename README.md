@@ -10,7 +10,8 @@ A simple, structured JSON logging library for Gleam that works across Erlang and
 ## Features
 
 - **Structured JSON Logging** - Clean, parseable log output
-- **Type-Safe Fields** - String, Int, Float, Bool, and nested Group fields
+- **Type-Safe Fields** - String, Int, Float, Bool, Duration and nested Group fields
+- **Stacktrace** - Capture and log stacktraces
 - **Flexible Configuration** - Custom writers, default fields, and minimum levels
 - **Cross-Platform** - Works on both Erlang and JavaScript targets
 
@@ -26,7 +27,7 @@ import glogg.{bool, info, int, string}
 pub fn main() {
   let logger = glogg.new()
 
-  info(logger, "This is fine", [
+  info(logger, "this is fine", [
     bool("everything_burning", True),
     string("glogg_temperature", "still_hot"),
     int("production_issues", 42069)
@@ -45,18 +46,29 @@ pub fn main() {
 ### Structured Fields
 
 ```gleam
-info(logger, "Processing payment", [
+info(logger, "processing payment", [
   string("payment_id", "pay_123"),
   float("amount", 29.99),
   int("user_id", 12345),
-  bool("verified", True)
+  bool("verified", True),
+  duration_ms("processing_time", duration.millisecond(150)
+])
+```
+
+#### Stacktrace
+
+```gleam
+error(logger, "huge issue", [
+  string("payment_id", "pay_123"),
+  int("user_id", 12345),
+  stacktrace()
 ])
 ```
 
 ### Nested Fields
 
 ```gleam
-info(logger, "API request completed", [
+info(logger, "api request completed", [
   group("request", [
     string("method", "POST"),
     string("path", "/api/users"),
