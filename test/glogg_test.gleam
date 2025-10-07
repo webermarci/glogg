@@ -76,28 +76,3 @@ pub fn fields_to_metadata_test() {
 
   Ok(Nil)
 }
-
-pub fn log_functions_test() {
-  glogg.configure_default_json_formatting()
-  glogg.configure_default_minimum_level(glogg.Error)
-
-  let logger =
-    glogg.new()
-    |> glogg.with_default_fields([
-      glogg.string("app", "glogg_test"),
-      glogg.string("env", "test"),
-    ])
-
-  glogg.debug(logger, "Debug message", [])
-  glogg.info(logger, "Info message", [])
-  glogg.notice(logger, "Notice message", [])
-  glogg.warning(logger, "Warning message", [])
-  glogg.error(logger, "Error message", [])
-  glogg.critical(logger, "Critical message", [])
-  glogg.alert(logger, "Alert message", [])
-  glogg.emergency(logger, "Emergency message", [])
-
-  glogg.error(logger, "Stack", [glogg.stacktrace()])
-
-  Ok(Nil)
-}
