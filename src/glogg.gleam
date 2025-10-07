@@ -1,76 +1,89 @@
-import gleam/io
-import gleam/json.{type Json}
+import gleam/dict.{type Dict}
+import gleam/dynamic.{type Dynamic}
 import gleam/list
 import gleam/time/duration.{type Duration}
-import gleam/time/timestamp
 
-pub opaque type Logger {
-  Logger(
-    min_level: Level,
-    default_fields: List(Field),
-    writer: Writer,
-    error_writer: Writer,
-  )
+@external(erlang, "glogg_ffi", "configure_default_json_formatting")
+@external(javascript, "./glogg_ffi.mjs", "configureDefaultJsonFormatting")
+fn platform_configure_default_json_formatting() -> Nil
+
+/// Configures all loggers to use JSON formatting by default.
+pub fn configure_default_json_formatting() {
+  platform_configure_default_json_formatting()
 }
 
+@external(erlang, "glogg_ffi", "configure_default_minimum_level")
+@external(javascript, "./glogg_ffi.mjs", "configureDefaultMinimumLevel")
+fn platform_configure_default_minimum_level(level: String) -> Nil
+
+/// Configures all loggers to use the specified minimum log level by default.
+/// Messages below this level will be ignored.
+pub fn configure_default_minimum_level(level: Level) {
+  platform_configure_default_minimum_level(level_to_string(level))
+}
+
+@external(erlang, "glogg_ffi", "log")
+@external(javascript, "./glogg_ffi.mjs", "log")
+fn platform_log(
+  level: String,
+  message: String,
+  metadata: Dict(String, dynamic.Dynamic),
+) -> Nil
+
+@external(erlang, "glogg_ffi", "capture_stacktrace")
+@external(javascript, "./glogg_ffi.mjs", "captureStacktrace")
+fn platform_capture_stacktrace() -> List(Dynamic)
+
 pub type Level {
-  Trace
-  Info
-  Error
-  Warn
   Debug
+  Info
+  Notice
+  Warning
+  Error
+  Critical
+  Alert
+  Emergency
+}
+
+fn level_to_string(level: Level) -> String {
+  case level {
+    Debug -> "debug"
+    Info -> "info"
+    Notice -> "notice"
+    Warning -> "warning"
+    Error -> "error"
+    Critical -> "critical"
+    Alert -> "alert"
+    Emergency -> "emergency"
+  }
 }
 
 pub opaque type Field {
   String(key: String, value: String)
-  StringList(key: String, value: List(String))
   Bool(key: String, value: Bool)
   Int(key: String, value: Int)
   Float(key: String, value: Float)
   Group(key: String, fields: List(Field))
+  Stacktrace
 }
 
-pub type Writer =
-  fn(String) -> Nil
+pub opaque type Logger {
+  Logger(default_fields: List(Field))
+}
 
 /// Creates a new logger with sensible default settings.
+///
 /// By default, the minimum level is `Debug` and there are no default fields.
 pub fn new() -> Logger {
-  Logger(Debug, [], io.println, io.println_error)
-}
-
-/// Returns a new logger with the specified minimum log level.
-///
-/// Log messages with a severity below this level will be ignored.
-pub fn with_min_level(logger: Logger, minimum_level: Level) -> Logger {
-  Logger(
-    minimum_level,
-    logger.default_fields,
-    logger.writer,
-    logger.error_writer,
-  )
-}
-
-/// Returns a new logger with a custom writer.
-///
-/// This writer will be used to write all log messages produced by this logger.
-pub fn with_writer(logger: Logger, writer: Writer) -> Logger {
-  Logger(logger.min_level, logger.default_fields, writer, logger.error_writer)
-}
-
-/// Returns a new logger with a custom error writer.
-///
-/// This writer will be used to write all error log messages produced by this logger.
-pub fn with_error_writer(logger: Logger, error_writer: Writer) -> Logger {
-  Logger(logger.min_level, logger.default_fields, logger.writer, error_writer)
+  Logger([])
 }
 
 /// Returns a new logger with a set of default fields.
 ///
 /// These fields will be included in every log message produced by this logger,
 /// in addition to any fields provided at the call site.
-pub fn with_default_fields(logger: Logger, fields: List(Field)) -> Logger {
-  Logger(logger.min_level, fields, logger.writer, logger.error_writer)
+pub fn with_default_fields(_: Logger, fields: List(Field)) -> Logger {
+  Logger(fields)
 }
 
 /// Adds additional default fields to an existing logger.
@@ -78,17 +91,12 @@ pub fn with_default_fields(logger: Logger, fields: List(Field)) -> Logger {
 /// The new fields are appended to the logger's existing default fields.
 /// These fields will be included in every log message produced by the returned logger.
 pub fn add_default_fields(logger: Logger, fields: List(Field)) -> Logger {
-  Logger(
-    logger.min_level,
-    list.append(logger.default_fields, fields),
-    logger.writer,
-    logger.error_writer,
-  )
+  Logger(list.append(logger.default_fields, fields))
 }
 
-/// Logs a message and fields at the `Trace` level.
-pub fn trace(logger: Logger, message: String, fields: List(Field)) {
-  log(logger, Trace, message, fields)
+/// Retrieves the default fields of a logger.
+pub fn get_default_fields(logger: Logger) -> List(Field) {
+  logger.default_fields
 }
 
 /// Logs a message and fields at the `Debug` level.
@@ -101,14 +109,34 @@ pub fn info(logger: Logger, message: String, fields: List(Field)) {
   log(logger, Info, message, fields)
 }
 
-/// Logs a message and fields at the `Warn` level.
-pub fn warn(logger: Logger, message: String, fields: List(Field)) {
-  log(logger, Warn, message, fields)
+/// Logs a message and fields at the `Notice` level.
+pub fn notice(logger: Logger, message: String, fields: List(Field)) {
+  log(logger, Notice, message, fields)
+}
+
+/// Logs a message and fields at the `Warning` level.
+pub fn warning(logger: Logger, message: String, fields: List(Field)) {
+  log(logger, Warning, message, fields)
 }
 
 /// Logs a message and fields at the `Error` level to standard error.
 pub fn error(logger: Logger, message: String, fields: List(Field)) {
   log(logger, Error, message, fields)
+}
+
+/// Logs a message and fields at the `Critical` level to standard error.
+pub fn critical(logger: Logger, message: String, fields: List(Field)) {
+  log(logger, Critical, message, fields)
+}
+
+/// Logs a message and fields at the `Alert` level to standard error.
+pub fn alert(logger: Logger, message: String, fields: List(Field)) {
+  log(logger, Alert, message, fields)
+}
+
+/// Logs a message and fields at the `Emergency` level to standard error.
+pub fn emergency(logger: Logger, message: String, fields: List(Field)) {
+  log(logger, Emergency, message, fields)
 }
 
 /// Creates a string field with the given key and value.
@@ -131,97 +159,52 @@ pub fn float(key: String, value: Float) -> Field {
   Float(key:, value:)
 }
 
-/// Creates a group field containing nested fields.
-pub fn group(key: String, fields: List(Field)) -> Field {
-  Group(key:, fields:)
-}
-
-/// Creates a duration field in miliseconds.
+/// Creates a duration field in milliseconds with the given key and value.
 pub fn duration_ms(key: String, duration: Duration) -> Field {
   Float(key:, value: duration.to_seconds(duration) *. 1000.0)
 }
 
-/// Creates a stacktrace field capturing the current stack trace.
+/// Creates a group field with the given key and nested fields.
+pub fn group(key: String, fields: List(Field)) -> Field {
+  Group(key:, fields:)
+}
+
+/// Creates a stacktrace field that with the key "stacktrace".
 pub fn stacktrace() -> Field {
-  StringList("stacktrace", capture_stacktrace())
+  Stacktrace
 }
 
-fn level_to_int(level: Level) -> Int {
-  case level {
-    Trace -> 0
-    Debug -> 1
-    Info -> 2
-    Warn -> 3
-    Error -> 4
-  }
+fn dict_to_dynamic(dict: Dict(String, Dynamic)) -> Dynamic {
+  let pairs =
+    dict
+    |> dict.to_list()
+    |> list.map(fn(pair) { #(dynamic.string(pair.0), pair.1) })
+
+  dynamic.properties(pairs)
 }
 
-fn level_to_string(level: Level) -> String {
-  case level {
-    Trace -> "TRACE"
-    Debug -> "DEBUG"
-    Info -> "INFO"
-    Warn -> "WARN"
-    Error -> "ERROR"
-  }
-}
-
-fn log(logger: Logger, level: Level, message: String, fields: List(Field)) {
-  case level_to_int(level) < level_to_int(logger.min_level) {
-    True -> Nil
-    False -> {
-      case level {
-        Error -> {
-          serialize(level, message, logger.default_fields, fields)
-          |> logger.error_writer
-        }
-        _ -> {
-          serialize(level, message, logger.default_fields, fields)
-          |> logger.writer
-        }
-      }
-    }
-  }
-}
-
-pub fn serialize(
-  level: Level,
-  message: String,
-  default_fields: List(Field),
-  fields: List(Field),
-) -> String {
-  let initial_fields = [
-    #(
-      "time",
-      json.string(
-        timestamp.system_time() |> timestamp.to_rfc3339(duration.seconds(0)),
-      ),
-    ),
-    #("level", json.string(level_to_string(level))),
-    #("msg", json.string(message)),
-  ]
-
-  let all_user_fields = list.append(default_fields, fields)
-
-  initial_fields
-  |> list.append(fields_to_json(all_user_fields))
-  |> json.object()
-  |> json.to_string()
-}
-
-fn fields_to_json(fields: List(Field)) -> List(#(String, Json)) {
-  list.map(fields, fn(field) {
+/// Converts a list of fields into a metadata dictionary suitable for logging.
+pub fn fields_to_metadata(fields: List(Field)) -> Dict(String, Dynamic) {
+  list.fold(fields, dict.new(), fn(acc, field) {
     case field {
-      String(k, v) -> #(k, json.string(v))
-      StringList(k, v) -> #(k, json.array(v, json.string))
-      Bool(k, v) -> #(k, json.bool(v))
-      Int(k, v) -> #(k, json.int(v))
-      Float(k, v) -> #(k, json.float(v))
-      Group(k, v) -> #(k, json.object(fields_to_json(v)))
+      String(k, v) -> dict.insert(acc, k, dynamic.string(v))
+      Bool(k, v) -> dict.insert(acc, k, dynamic.bool(v))
+      Int(k, v) -> dict.insert(acc, k, dynamic.int(v))
+      Float(k, v) -> dict.insert(acc, k, dynamic.float(v))
+      Group(k, fs) ->
+        dict.insert(acc, k, fields_to_metadata(fs) |> dict_to_dynamic)
+      Stacktrace ->
+        dict.insert(
+          acc,
+          "stacktrace",
+          dynamic.array(platform_capture_stacktrace()),
+        )
     }
   })
 }
 
-@external(erlang, "glogg_ffi", "capture_stacktrace")
-@external(javascript, "./glogg_ffi.mjs", "captureStacktrace")
-pub fn capture_stacktrace() -> List(String)
+fn log(logger: Logger, level: Level, message: String, fields: List(Field)) {
+  let all_fields = list.append(logger.default_fields, fields)
+  let metadata = fields_to_metadata(all_fields)
+  platform_log(level_to_string(level), message, metadata)
+}

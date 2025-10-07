@@ -12,7 +12,6 @@ A simple, structured JSON logging library for Gleam that works across Erlang and
 - **Structured JSON Logging** - Clean, parseable log output
 - **Type-Safe Fields** - String, Int, Float, Bool, Duration and nested Group fields
 - **Stacktrace** - Capture and log stacktraces
-- **Flexible Configuration** - Custom writers, default fields, and minimum levels
 - **Cross-Platform** - Works on both Erlang and JavaScript targets
 
 ## Quick Start
@@ -25,20 +24,16 @@ gleam add glogg
 import glogg.{bool, info, int, string}
 
 pub fn main() {
-  let logger = glogg.new()
+  glogg.configure_default_json_formatting()
+  glogg.configure_default_minimum_level(glogg.Debug)
 
-  info(logger, "this is fine", [
+  glogg.new()
+  |> info("this is fine", [
     bool("everything_burning", True),
     string("glogg_temperature", "still_hot"),
     int("production_issues", 42069)
   ])
 }
-```
-
-**Output:**
-
-```json
-{"time":"2025-09-25T22:03:45.124Z","level":"INFO","msg":"This is fine","everything_burning":true,"glogg_temperature":"still_hot","production_issues":42069}
 ```
 
 ## Usage Examples
@@ -84,11 +79,14 @@ info(logger, "api request completed", [
 ### Logger Configuration
 
 ```gleam
-// Set minimum log level
-let logger =
-  glogg.new()
-  |> with_min_level(Info)
-// Only Info, Warn, Error
+// Configures the BEAM logger to output JSON to stdout.
+// This should be done once at the start of your application.
+// It is a no-op on JavaScript targets.
+glogg.configure_default_json_formatting()
+
+// Set the minimum log level
+// (Debug, Info, Notice, Warning, Error, Critical, Alert, Emergency)
+glogg.configure_default_minimum_level(glogg.Info)
 
 // Add default fields to all logs
 let logger =
@@ -99,22 +97,7 @@ let logger =
   ])
 
 // Add more default fields later
-let logger =
-  logger
-  |> add_default_fields([string("environment", "production")])
-```
-
-### Custom Writers
-
-```gleam
-// Custom writer function
-let file_writer = fn(line: String) {
-  // Write to file, send to external service, etc.
-  io.println("LOG: " <> line)
-}
-
-let logger =
-  glogg.new()
-  |> with_writer(file_writer)
-  |> with_error_writer(file_writer) // Separate error writer
+let logger = glogg.add_default_fields(logger, [
+  string("environment", "production")
+])
 ```
