@@ -68,108 +68,254 @@ pub opaque type Field {
 }
 
 pub opaque type Logger {
-  Logger(default_fields: List(Field))
+  Logger(context: List(Field))
 }
 
-/// Creates a new logger with sensible default settings.
+/// Creates a new logger.
 ///
-/// By default, the minimum level is `Debug` and there are no default fields.
-pub fn new() -> Logger {
+/// # Example
+///
+/// ```gleam
+/// let logger = glogg.new_logger()
+/// ```
+pub fn new_logger() -> Logger {
   Logger([])
 }
 
-/// Returns a new logger with a set of default fields.
+/// Adds context fields to a logger.
 ///
-/// These fields will be included in every log message produced by this logger,
-/// in addition to any fields provided at the call site.
-pub fn with_default_fields(_: Logger, fields: List(Field)) -> Logger {
-  Logger(fields)
+/// These fields will be included in every log message.
+///
+/// # Example
+///
+/// ```gleam
+/// let logger =
+///   glogg.new_logger()
+///   |> glogg.with_context([
+///     glogg.string("app", "my_app"),
+///     glogg.string("env", "production"),
+///   ])
+/// ```
+pub fn with_context(logger: Logger, fields: List(Field)) -> Logger {
+  Logger(list.append(logger.context, fields))
 }
 
-/// Adds additional default fields to an existing logger.
-///
-/// The new fields are appended to the logger's existing default fields.
-/// These fields will be included in every log message produced by the returned logger.
-pub fn add_default_fields(logger: Logger, fields: List(Field)) -> Logger {
-  Logger(list.append(logger.default_fields, fields))
-}
-
-/// Retrieves the default fields of a logger.
-pub fn get_default_fields(logger: Logger) -> List(Field) {
-  logger.default_fields
+/// Retrieves the context fields of a logger.
+pub fn get_context(logger: Logger) -> List(Field) {
+  logger.context
 }
 
 /// Logs a message and fields at the `Debug` level.
+///
+/// # Example
+///
+/// ```gleam
+/// logger
+/// |> glogg.debug("Message", [
+///   glogg.string("key", "value"),
+/// ])
+/// ```
 pub fn debug(logger: Logger, message: String, fields: List(Field)) {
   log(logger, Debug, message, fields)
 }
 
 /// Logs a message and fields at the `Info` level.
+///
+/// # Example
+///
+/// ```gleam
+/// logger
+/// |> glogg.info("Message", [
+///   glogg.string("key", "value"),
+/// ])
+/// ```
 pub fn info(logger: Logger, message: String, fields: List(Field)) {
   log(logger, Info, message, fields)
 }
 
 /// Logs a message and fields at the `Notice` level.
+///
+/// # Example
+///
+/// ```gleam
+/// logger
+/// |> glogg.notice("Message", [
+///   glogg.string("key", "value"),
+/// ])
+/// ```
 pub fn notice(logger: Logger, message: String, fields: List(Field)) {
   log(logger, Notice, message, fields)
 }
 
 /// Logs a message and fields at the `Warning` level.
+///
+/// # Example
+///
+/// ```gleam
+/// logger
+/// |> glogg.warning("Message", [
+///   glogg.string("key", "value"),
+/// ])
+/// ```
 pub fn warning(logger: Logger, message: String, fields: List(Field)) {
   log(logger, Warning, message, fields)
 }
 
 /// Logs a message and fields at the `Error` level to standard error.
+///
+/// # Example
+///
+/// ```gleam
+/// logger
+/// |> glogg.error("Message", [
+///   glogg.string("key", "value"),
+///   glogg.stacktrace(),
+/// ])
+/// ```
 pub fn error(logger: Logger, message: String, fields: List(Field)) {
   log(logger, Error, message, fields)
 }
 
 /// Logs a message and fields at the `Critical` level to standard error.
+///
+/// # Example
+///
+/// ```gleam
+/// logger
+/// |> glogg.critical("Message", [
+///   glogg.string("key", "value"),
+///   glogg.stacktrace(),
+/// ])
+/// ```
 pub fn critical(logger: Logger, message: String, fields: List(Field)) {
   log(logger, Critical, message, fields)
 }
 
 /// Logs a message and fields at the `Alert` level to standard error.
+///
+/// # Example
+///
+/// ```gleam
+/// glogg.alert(logger, "Message", [
+///   glogg.string("key", "value"),
+///   glogg.stacktrace(),
+/// ])
+/// ```
 pub fn alert(logger: Logger, message: String, fields: List(Field)) {
   log(logger, Alert, message, fields)
 }
 
 /// Logs a message and fields at the `Emergency` level to standard error.
+///
+/// # Example
+///
+/// ```gleam
+/// logger
+/// |> glogg.emergency(logger, "Message", [
+///   glogg.string("key", "value"),
+///   glogg.stacktrace(),
+/// ])
+/// ```
 pub fn emergency(logger: Logger, message: String, fields: List(Field)) {
   log(logger, Emergency, message, fields)
 }
 
 /// Creates a string field with the given key and value.
+///
+/// # Example
+///
+/// ```gleam
+/// logger
+/// |> glogg.info("Message", [
+///   glogg.string("key", "value"),
+/// ])
+/// ```
 pub fn string(key: String, value: String) -> Field {
   String(key:, value:)
 }
 
 /// Creates a boolean field with the given key and value.
+///
+/// # Example
+///
+/// ```gleam
+/// logger
+/// |> glogg.info("Message", [
+///   glogg.bool("key", True),
+/// ])
+/// ```
 pub fn bool(key: String, value: Bool) -> Field {
   Bool(key:, value:)
 }
 
 /// Creates an integer field with the given key and value.
+///
+/// # Example
+///
+/// ```gleam
+/// logger
+/// |> glogg.info("Message", [
+///   glogg.int("key", 42),
+/// ])
+/// ```
 pub fn int(key: String, value: Int) -> Field {
   Int(key:, value:)
 }
 
 /// Creates a float field with the given key and value.
+///
+/// # Example
+///
+/// ```gleam
+/// logger
+/// |> glogg.info("Message", [
+///   glogg.float("key", 3.14),
+/// ])
+/// ```
 pub fn float(key: String, value: Float) -> Field {
   Float(key:, value:)
 }
 
 /// Creates a duration field in milliseconds with the given key and value.
+///
+/// # Example
+///
+/// ```gleam
+/// logger
+/// |> glogg.info("Message", [
+///   glogg.duration_ms("key", duration.milliseconds(10)),
+/// ])
+/// ```
 pub fn duration_ms(key: String, duration: Duration) -> Field {
   Float(key:, value: duration.to_seconds(duration) *. 1000.0)
 }
 
 /// Creates a group field with the given key and nested fields.
+///
+/// # Example
+///
+/// ```gleam
+/// logger
+/// |> glogg.info("Message", [
+///   glogg.group("key", [
+///     glogg.string("nested_key", "nested_value"),
+///   ])
+/// ])
+/// ```
 pub fn group(key: String, fields: List(Field)) -> Field {
   Group(key:, fields:)
 }
 
 /// Creates a stacktrace field that with the key "stacktrace".
+///
+/// # Example
+///
+/// ```gleam
+/// logger
+/// |> glogg.info("Message", [
+///   glogg.stacktrace(),
+/// ])
+/// ```
 pub fn stacktrace() -> Field {
   Stacktrace
 }
@@ -204,7 +350,7 @@ pub fn fields_to_metadata(fields: List(Field)) -> Dict(String, Dynamic) {
 }
 
 fn log(logger: Logger, level: Level, message: String, fields: List(Field)) {
-  let all_fields = list.append(logger.default_fields, fields)
+  let all_fields = list.append(logger.context, fields)
   let metadata = fields_to_metadata(all_fields)
   platform_log(level_to_string(level), message, metadata)
 }

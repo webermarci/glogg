@@ -12,23 +12,23 @@ pub fn main() -> Nil {
   gleeunit.main()
 }
 
-pub fn default_fields_test() {
+pub fn context_test() {
   let logger =
-    glogg.new()
-    |> glogg.with_default_fields([
+    glogg.new_logger()
+    |> glogg.with_context([
       glogg.string("app", "glogg_test"),
       glogg.string("env", "test"),
     ])
 
-  should.equal(list.length(glogg.get_default_fields(logger)), 2)
+  should.equal(list.length(glogg.get_context(logger)), 2)
 
   let logger =
     logger
-    |> glogg.add_default_fields([
+    |> glogg.with_context([
       glogg.int("version", 1),
     ])
 
-  should.equal(list.length(glogg.get_default_fields(logger)), 3)
+  should.equal(list.length(glogg.get_context(logger)), 3)
 }
 
 pub fn fields_to_metadata_test() {
