@@ -68,18 +68,20 @@ pub opaque type Field {
 }
 
 pub opaque type Logger {
-  Logger(context: List(Field))
+  Logger(name: String, context: List(Field))
 }
 
 /// Creates a new logger.
 ///
+/// The logger will have a default context field "logger" with the given name.
+///
 /// # Example
 ///
 /// ```gleam
-/// let logger = glogg.new_logger()
+/// let logger = glogg.new_logger("name")
 /// ```
-pub fn new_logger() -> Logger {
-  Logger([])
+pub fn new_logger(name: String) -> Logger {
+  Logger(name, [String("logger", name)])
 }
 
 /// Adds context fields to a logger.
@@ -90,14 +92,14 @@ pub fn new_logger() -> Logger {
 ///
 /// ```gleam
 /// let logger =
-///   glogg.new_logger()
+///   glogg.new_logger("name")
 ///   |> glogg.with_context([
 ///     glogg.string("app", "my_app"),
 ///     glogg.string("env", "production"),
 ///   ])
 /// ```
 pub fn with_context(logger: Logger, fields: List(Field)) -> Logger {
-  Logger(list.append(logger.context, fields))
+  Logger(logger.name, list.append(logger.context, fields))
 }
 
 /// Retrieves the context fields of a logger.

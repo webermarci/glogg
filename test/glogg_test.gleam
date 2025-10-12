@@ -14,13 +14,28 @@ pub fn main() -> Nil {
 
 pub fn context_test() {
   let logger =
-    glogg.new_logger()
+    glogg.new_logger("test")
     |> glogg.with_context([
       glogg.string("app", "glogg_test"),
       glogg.string("env", "test"),
     ])
 
-  should.equal(list.length(glogg.get_context(logger)), 2)
+  should.equal(list.length(glogg.get_context(logger)), 3)
+
+  should.be_true(list.contains(
+    glogg.get_context(logger),
+    glogg.string("logger", "test"),
+  ))
+
+  should.be_true(list.contains(
+    glogg.get_context(logger),
+    glogg.string("app", "glogg_test"),
+  ))
+
+  should.be_true(list.contains(
+    glogg.get_context(logger),
+    glogg.string("env", "test"),
+  ))
 
   let logger =
     logger
@@ -28,7 +43,12 @@ pub fn context_test() {
       glogg.int("version", 1),
     ])
 
-  should.equal(list.length(glogg.get_context(logger)), 3)
+  should.equal(list.length(glogg.get_context(logger)), 4)
+
+  should.be_true(list.contains(
+    glogg.get_context(logger),
+    glogg.int("version", 1),
+  ))
 }
 
 pub fn fields_to_metadata_test() {
