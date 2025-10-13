@@ -9,95 +9,155 @@ A simple, structured JSON logging library for Gleam that works across Erlang and
 
 ## Features
 
-- **Structured JSON Logging** - Clean, parseable log output
-- **Type-Safe Fields** - String, Int, Float, Bool, Duration and nested Group fields
-- **Stacktrace** - Capture and log stacktraces
-- **Cross-Platform** - Works on both Erlang and JavaScript targets
+- **Structured JSON Logging** - Clean, parseable log output for production systems.
+- **Handler-based System** - Configure multiple log destinations with different log levels.
+- **Hook Pipelines** - Intercept and modify log events for advanced use cases like redacting sensitive data or dynamic context injection.
+- **Type-Safe Fields** - String, Int, Float, Bool, Duration and nested Group fields.
+- **Cross-Platform** - Works on both Erlang and JavaScript targets.
 
 ## Quick Start
+
+1.  **Add `glogg` to your project:**
 
 ```sh
 gleam add glogg
 ```
 
+2.  **Start logging!**
+
 ```gleam
-import glogg.{bool, info, int, string}
+import glogg/logger
 
 pub fn main() {
-  glogg.configure_default_json_formatting()
-  glogg.configure_default_minimum_level(glogg.Debug)
+  let my_logger = logger.new("my_app")
 
-  glogg.new()
-  |> info("this is fine", [
-    bool("everything_burning", True),
-    string("glogg_temperature", "still_hot"),
-    int("production_issues", 42069)
+  my_logger
+  |> logger.info("Hello from glogg!", [
+    logger.string("mood", "cozy"),
   ])
 }
 ```
 
-## Usage Examples
+## Basic Configuration
 
-### Structured Fields
+The default handler can be easily configured. This is useful for setting a global log level or enabling JSON formatting on the Erlang target.
 
 ```gleam
-info(logger, "processing payment", [
-  string("payment_id", "pay_123"),
-  float("amount", 29.99),
-  int("user_id", 12345),
-  bool("verified", True),
-  duration_ms("processing_time", duration.millisecond(150)
-])
+import glogg/handler
+import glogg/level
+
+pub fn main() {
+  // For Erlang, this enables JSON output for the default handler.
+  // It is a no-op on JavaScript, which always logs structured objects.
+  handler.configure_default_handler_json_formatting()
+
+  // Set the minimum log level for the default handler.
+  handler.configure_default_handler_minimum_level(level.Info)
+}
 ```
 
-#### Stacktrace
+## Fields
+
+You can add structured data to your logs using `Field`s.
 
 ```gleam
-error(logger, "huge issue", [
-  string("payment_id", "pay_123"),
-  int("user_id", 12345),
-  stacktrace()
-])
-```
+import gleam/time
+import glogg/logger
 
-### Nested Fields
+pub fn handle_request(logger: logger.Logger) {
+  logger
+  |> logger.info("API request completed", [
+    // Add basic fields
+    logger.string("method", "POST"),
+    logger.int("status", 201),
+    logger.bool("is_testing", False),
+    logger.float("load_time", 0.256),
 
-```gleam
-info(logger, "api request completed", [
-  group("request", [
-    string("method", "POST"),
-    string("path", "/api/users"),
-    int("status", 201)
-  ]),
-  group("response", [
-    float("duration_ms", 45.2),
-    int("bytes", 1024)
+    // Add time durations
+    logger.duration_ms("duration", time.milliseconds(120)),
+
+    // Add nested groups of fields
+    logger.group("user", [
+      logger.int("id", 1),
+      logger.string("name", "admin"),
+    ]),
+
+    // Add a stacktrace on errors
+    logger.stacktrace(),
   ])
-])
+}
 ```
 
-### Logger Configuration
+## Advanced Usage
+
+### Custom Handlers
+
+While the default handler is useful, you can add your own for more complex scenarios. For example, you might want to log errors to the console, but all other logs elsewhere.
+
+Currently, `glogg` only supports console handlers (`logger_std_h` on Erlang), but the API is designed for future expansion to file handlers.
 
 ```gleam
-// Configures the BEAM logger to output JSON to stdout.
-// This should be done once at the start of your application.
-// It is a no-op on JavaScript targets.
-glogg.configure_default_json_formatting()
+import glogg/handler
+import glogg/level
+import glogg/logger
 
-// Set the minimum log level
-// (Debug, Info, Notice, Warning, Error, Critical, Alert, Emergency)
-glogg.configure_default_minimum_level(glogg.Info)
+pub fn main() {
+  // Remove the default handler to take full control.
+  handler.remove("default")
 
-// Add default fields to all logs
-let logger =
-  glogg.new()
-  |> with_default_fields([
-    string("service", "web-api"),
-    string("version", "1.2.3"),
+  // Add a new handler that only logs warnings and above.
+  let warning_handler =
+    handler.new("console_warnings")
+    |> handler.with_minimal_level(level.Warning)
+  handler.add(warning_handler)
+
+  let logger = logger.new("my_app")
+
+  // This message will NOT be logged.
+  logger |> logger.info("This is too quiet", [])
+
+  // This message WILL be logged.
+  logger |> logger.error("This is loud enough!", [])
+}
+```
+
+### Hooks (Middleware)
+
+Hooks are a powerful feature that allow you to create a pipeline to process and modify every log event for a given logger. They are especially useful for testing or dynamically adding context.
+
+A hook is a function that takes a `LogEvent` and returns an `Option(LogEvent)`.
+- Returning `Some(event)` passes the (potentially modified) event to the next hook in the pipeline.
+- Returning `None` cancels the log event entirely.
+
+Hooks are executed in the order they are added.
+
+```gleam
+import glogg/logger
+import gleam/list
+import gleam/option.{Some}
+
+pub fn main() {
+  // This hook redacts password fields for security.
+  let redact_hook = fn(event: logger.LogEvent) {
+    let new_fields =
+      list.map(event.fields, fn(field) {
+        case field {
+          logger.String("password", _) -> logger.string("password", "[REDACTED]")
+          _ -> field
+        }
+      })
+    Some(logger.LogEvent(..event, fields: new_fields))
+  }
+
+  let logger =
+    logger.new("my_app")
+    |> logger.add_hook(redact_hook)
+
+  // The final log output will have the `password` field redacted.
+  logger
+  |> logger.info("User logged in", [
+    logger.string("user", "admin"),
+    logger.string("password", "supersecret"),
   ])
-
-// Add more default fields later
-let logger = glogg.add_default_fields(logger, [
-  string("environment", "production")
-])
+}
 ```

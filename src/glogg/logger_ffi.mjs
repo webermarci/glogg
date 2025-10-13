@@ -1,4 +1,5 @@
-import { toList } from "../gleam_stdlib/gleam.mjs";
+import { toList } from "../../gleam_stdlib/gleam.mjs";
+import { handlers } from "./handler_ffi.mjs";
 
 const isDeno = typeof Deno !== "undefined";
 const isBun = typeof Bun !== "undefined";
@@ -18,8 +19,6 @@ const severity = {
   info: 6,
   debug: 7,
 };
-
-let minimumSeverity = 7;
 
 function write(level, data) {
   const isError =
@@ -53,50 +52,6 @@ function write(level, data) {
   }
 }
 
-function deepGleamDictToObject(data) {
-  if (
-    typeof data === "object" &&
-    data !== null &&
-    data.entries &&
-    !Array.isArray(data)
-  ) {
-    const obj = {};
-
-    for (const [key, value] of data.entries()) {
-      obj[key] = deepGleamDictToObject(value);
-    }
-
-    return obj;
-  }
-
-  return data;
-}
-
-export function configureDefaultJsonFormatting(handler) {
-  return;
-}
-
-export function configureDefaultMinimumLevel(level) {
-  if (!(level in severity)) return;
-  minimumSeverity = severity[level];
-}
-
-export function log(level, message, metadata) {
-  if (!(level in severity)) return;
-  if (severity[level] > minimumSeverity) return;
-
-  const metadataObject = deepGleamDictToObject(metadata);
-
-  const data = {
-    time: new Date().getTime() * 1000,
-    level: level,
-    msg: message,
-    ...metadataObject,
-  };
-
-  write(level, data);
-}
-
 export function captureStacktrace() {
   // Use V8's captureStackTrace when available to omit this function from frames
   const holder = {};
@@ -119,4 +74,51 @@ export function captureStacktrace() {
     .slice(1)
     .map((l) => l.trim());
   return toList(frames);
+}
+
+function deepGleamDictToObject(data) {
+  if (
+    typeof data === "object" &&
+    data !== null &&
+    data.entries &&
+    !Array.isArray(data)
+  ) {
+    const obj = {};
+
+    for (const [key, value] of data.entries()) {
+      obj[key] = deepGleamDictToObject(value);
+    }
+
+    return obj;
+  }
+
+  return data;
+}
+
+export function log(level, message, metadata) {
+  const messageSeverity = severity[level];
+
+  if (messageSeverity === undefined || handlers.size === 0) {
+    return;
+  }
+
+  const filteredHandlers = handlers
+    .values()
+    .filter((h) => severity[h.minimum_level] > messageSeverity)
+    .toArray();
+
+  if (!filteredHandlers.length) {
+    return;
+  }
+
+  const metadataObject = deepGleamDictToObject(metadata);
+
+  const data = {
+    time: new Date().getTime() * 1000,
+    level: level,
+    msg: message,
+    ...metadataObject,
+  };
+
+  write(level, data);
 }

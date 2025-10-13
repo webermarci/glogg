@@ -1,14 +1,6 @@
--module(glogg_ffi).
+-module(logger_ffi).
 
--export([configure_default_json_formatting/0, configure_default_minimum_level/1, log/3,
-         capture_stacktrace/0]).
-
-configure_default_json_formatting() ->
-    logger:set_handler_config(default, formatter, {logger_formatter_json, #{}}).
-
-configure_default_minimum_level(LevelString) ->
-    LevelAtom = binary_to_atom(LevelString, utf8),
-    logger:set_handler_config(default, level, LevelAtom).
+-export([log/3, capture_stacktrace/0]).
 
 deep_unwrap_and_atomize_keys(Map) when is_map(Map) ->
     maps:from_list([{maybe_atomize_key(K), deep_unwrap(V)} || {K, V} <- maps:to_list(Map)]);
@@ -37,7 +29,7 @@ deep_unwrap(Other) ->
     Other.
 
 log(LevelString, Message, Metadata) ->
-    LevelAtom = binary_to_atom(LevelString, utf8),
+    LevelAtom = level_ffi:level_binary_to_atom(LevelString),
     CleanMeta = deep_unwrap_and_atomize_keys(Metadata),
     logger:log(LevelAtom, Message, CleanMeta).
 

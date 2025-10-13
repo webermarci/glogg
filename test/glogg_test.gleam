@@ -2,68 +2,76 @@ import gleam/dict
 import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/list
+import gleam/option.{None}
 import gleam/result
 import gleam/time/duration
 import gleeunit
 import gleeunit/should
-import glogg
+import glogg/handler
+import glogg/level
+import glogg/logger.{
+  type LogEvent, bool, duration_ms, fields_to_metadata, float, get_context,
+  group, int, stacktrace, string, with_context,
+}
 
 pub fn main() -> Nil {
   gleeunit.main()
 }
 
-pub fn context_test() {
+pub fn handler_test() {
+  let my_handler =
+    handler.new("test_handler")
+    |> handler.with_minimal_level(level.Warning)
+
+  should.equal(handler.get_id(my_handler), "test_handler")
+
+  handler.add(my_handler)
+  handler.remove("test_handler")
+}
+
+pub fn logger_context_test() {
   let logger =
-    glogg.new_logger("test")
-    |> glogg.with_context([
-      glogg.string("app", "glogg_test"),
-      glogg.string("env", "test"),
+    logger.new("test")
+    |> with_context([
+      string("app", "glogg_test"),
+      string("env", "test"),
     ])
 
-  should.equal(list.length(glogg.get_context(logger)), 3)
+  should.equal(list.length(logger |> get_context), 3)
+
+  should.be_true(list.contains(logger |> get_context, string("logger", "test")))
 
   should.be_true(list.contains(
-    glogg.get_context(logger),
-    glogg.string("logger", "test"),
+    logger |> get_context,
+    string("app", "glogg_test"),
   ))
 
-  should.be_true(list.contains(
-    glogg.get_context(logger),
-    glogg.string("app", "glogg_test"),
-  ))
-
-  should.be_true(list.contains(
-    glogg.get_context(logger),
-    glogg.string("env", "test"),
-  ))
+  should.be_true(list.contains(logger |> get_context, string("env", "test")))
 
   let logger =
     logger
-    |> glogg.with_context([
-      glogg.int("version", 1),
+    |> with_context([
+      int("version", 1),
     ])
 
-  should.equal(list.length(glogg.get_context(logger)), 4)
+  should.equal(list.length(logger |> get_context), 4)
 
-  should.be_true(list.contains(
-    glogg.get_context(logger),
-    glogg.int("version", 1),
-  ))
+  should.be_true(list.contains(logger |> get_context, int("version", 1)))
 }
 
 pub fn fields_to_metadata_test() {
   let metadata =
-    glogg.fields_to_metadata([
-      glogg.string("string_key", "value"),
-      glogg.int("int_key", 42),
-      glogg.bool("bool_key", True),
-      glogg.float("float_key", 3.14),
-      glogg.duration_ms("duration_key", duration.milliseconds(10)),
-      glogg.group("group_key", [
-        glogg.string("nested_string_key", "nested_value"),
-        glogg.int("nested_int_key", 1337),
+    fields_to_metadata([
+      string("string_key", "value"),
+      int("int_key", 42),
+      bool("bool_key", True),
+      float("float_key", 3.14),
+      duration_ms("duration_key", duration.milliseconds(10)),
+      group("group_key", [
+        string("nested_string_key", "nested_value"),
+        int("nested_int_key", 1337),
       ]),
-      glogg.stacktrace(),
+      stacktrace(),
     ])
 
   should.equal(dict.size(metadata), 7)
@@ -95,4 +103,23 @@ pub fn fields_to_metadata_test() {
   }
 
   Ok(Nil)
+}
+
+pub fn logging_test() {
+  handler.configure_default_handler_json_formatting()
+  handler.configure_default_handler_minimum_level(level.Debug)
+
+  let assert_and_cancel_hook = fn(event: LogEvent) {
+    should.be_true(list.contains(event.fields, string("env", "test")))
+    should.be_true(list.contains(event.fields, string("hello", "world")))
+    None
+  }
+
+  let logger =
+    logger.new("test_logger")
+    |> with_context([string("env", "test")])
+    |> logger.add_hook(assert_and_cancel_hook)
+
+  logger
+  |> logger.info("test", [string("hello", "world")])
 }
