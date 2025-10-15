@@ -1,21 +1,42 @@
 import glogg/level.{type Level, Debug, level_to_string}
 
-@external(erlang, "handler_ffi", "configure_default_handler_json_formatting")
-@external(javascript, "./handler_ffi.mjs", "configureDefaultHandlerJsonFormatting")
-fn platform_configure_default_handler_json_formatting() -> Nil
+@external(erlang, "handler_ffi", "set_default_handler_json_formatting")
+@external(javascript, "./handler_ffi.mjs", "setDefaultHandlerJsonFormatting")
+fn platform_set_default_handler_json_formatting() -> Nil
 
-/// Configures the default handler to use JSON formatting.
-pub fn configure_default_handler_json_formatting() {
-  platform_configure_default_handler_json_formatting()
+/// Sets the default handler to use JSON formatting.
+pub fn set_default_handler_json_formatting() {
+  platform_set_default_handler_json_formatting()
 }
 
-@external(erlang, "handler_ffi", "configure_default_handler_minimum_level")
-@external(javascript, "./handler_ffi.mjs", "configureDefaultHandlerMinimumLevel")
-fn platform_configure_default_handler_minimum_level(level: String) -> Nil
+@external(erlang, "handler_ffi", "set_default_handler_minimum_level")
+@external(javascript, "./handler_ffi.mjs", "setDefaultHandlerMinimumLevel")
+fn platform_set_default_handler_minimum_level(level: String) -> Nil
 
-/// Configures the minimum log level for the default handler.
-pub fn configure_default_handler_minimum_level(level: Level) {
-  platform_configure_default_handler_minimum_level(level_to_string(level))
+/// Sets the minimum log level for the default handler.
+pub fn set_default_handler_minimum_level(level: Level) {
+  platform_set_default_handler_minimum_level(level_to_string(level))
+}
+
+@external(erlang, "handler_ffi", "set_primary_minimum_level")
+@external(javascript, "./handler_ffi.mjs", "setPrimaryMinimumLevel")
+fn platform_set_primary_minimum_level(level: String) -> Nil
+
+/// Sets the global primary log level for the Erlang backend.
+///
+/// Messages below this level are discarded before reaching any handlers.
+/// The default level is `Notice`. This is a no-op on the JavaScript target.
+pub fn set_primary_minimum_level(level: Level) {
+  platform_set_primary_minimum_level(level_to_string(level))
+}
+
+/// Sets up the default handler with JSON formatting and a minimum level of `Debug`.
+/// Also sets the global primary minimum level to `Debug`.
+/// This is a convenience function for quick setup.
+pub fn setup_default_handler() {
+  set_primary_minimum_level(Debug)
+  set_default_handler_json_formatting()
+  set_default_handler_minimum_level(Debug)
 }
 
 pub opaque type Handler {
@@ -57,6 +78,11 @@ fn platform_add_handler(id: String, level: String) -> Nil
 
 /// Adds a handler to the logging system.
 ///
+/// On the Erlang target, the handler id is an atom,
+/// which means creating too many handlers can exhaust the atom table.
+/// That can lead to system instability.
+/// It's recommended to create a limited number of handlers and reuse them.
+///
 /// # Example
 ///
 /// ```gleam
@@ -67,6 +93,24 @@ fn platform_add_handler(id: String, level: String) -> Nil
 /// ```
 pub fn add(handler: Handler) {
   platform_add_handler(handler.id, level_to_string(handler.minimal_level))
+}
+
+@external(erlang, "handler_ffi", "set_handler_minimum_level")
+@external(javascript, "./handler_ffi.mjs", "setHandlerMinimumLevel")
+fn platform_set_handler_minimum_level(id: String, level: String) -> Nil
+
+/// Sets the minimum log level for a specific handler by its ID.
+/// This can be used to change the log level of an existing handler.
+///
+/// # Example
+///
+/// ```gleam
+/// handler.set_handler_minimum_level("my_handler_id", level.Warning)
+/// // or
+/// handler.set_handler_minimum_level(my_handler |> handler.get_id(), level.Warning)
+/// ```
+pub fn set_handler_minimum_level(id: String, level: Level) {
+  platform_set_handler_minimum_level(id, level_to_string(level))
 }
 
 @external(erlang, "handler_ffi", "remove_handler")

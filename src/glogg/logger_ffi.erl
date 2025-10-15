@@ -2,36 +2,19 @@
 
 -export([log/3, capture_stacktrace/0]).
 
-deep_unwrap_and_atomize_keys(Map) when is_map(Map) ->
-    maps:from_list([{maybe_atomize_key(K), deep_unwrap(V)} || {K, V} <- maps:to_list(Map)]);
-deep_unwrap_and_atomize_keys(Other) ->
-    deep_unwrap(Other).
-
-maybe_atomize_key(K) when is_binary(K) ->
-    try
-        binary_to_existing_atom(K, utf8)
-    catch
-        error:badarg ->
-            K
-    end;
-maybe_atomize_key(K) when is_atom(K) ->
-    K;
-maybe_atomize_key(K) ->
-    K.
-
-deep_unwrap(Map) when is_map(Map) ->
-    maps:from_list([{maybe_atomize_key(K), deep_unwrap(V)} || {K, V} <- maps:to_list(Map)]);
-deep_unwrap({Tag, Value}) when is_atom(Tag) ->
-    deep_unwrap(Value);
-deep_unwrap(List) when is_list(List) ->
-    [deep_unwrap(E) || E <- List];
-deep_unwrap(Other) ->
-    Other.
-
 log(LevelString, Message, Metadata) ->
     LevelAtom = level_ffi:level_binary_to_atom(LevelString),
-    CleanMeta = deep_unwrap_and_atomize_keys(Metadata),
+    CleanMeta = deep_unwrap_dynamic(Metadata),
     logger:log(LevelAtom, Message, CleanMeta).
+
+deep_unwrap_dynamic(Map) when is_map(Map) ->
+    maps:map(fun(_K, V) -> deep_unwrap_dynamic(V) end, Map);
+deep_unwrap_dynamic({gleam_dynamic, _Type, Value}) ->
+    deep_unwrap_dynamic(Value);
+deep_unwrap_dynamic(List) when is_list(List) ->
+    [deep_unwrap_dynamic(E) || E <- List];
+deep_unwrap_dynamic(Other) ->
+    Other.
 
 capture_stacktrace() ->
     Stacktrace =

@@ -106,10 +106,10 @@ pub fn fields_to_metadata_test() {
 }
 
 pub fn logging_test() {
-  handler.configure_default_handler_json_formatting()
-  handler.configure_default_handler_minimum_level(level.Debug)
+  handler.setup_default_handler()
 
   let assert_and_cancel_hook = fn(event: LogEvent) {
+    should.be_true(list.contains(event.fields, string("logger", "test_logger")))
     should.be_true(list.contains(event.fields, string("env", "test")))
     should.be_true(list.contains(event.fields, string("hello", "world")))
     None
