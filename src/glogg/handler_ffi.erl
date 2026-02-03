@@ -1,7 +1,8 @@
 -module(handler_ffi).
 
 -export([set_default_handler_json_formatting/0, set_default_handler_minimum_level/1,
-         set_primary_minimum_level/1, add_handler/2, remove_handler/1]).
+         set_primary_minimum_level/1, add_handler/2, set_handler_minimum_level/2,
+         remove_handler/1]).
 
 set_default_handler_json_formatting() ->
     logger:set_handler_config(default, formatter, {logger_formatter_json, #{}}).
