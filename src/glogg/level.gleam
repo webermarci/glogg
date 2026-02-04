@@ -23,6 +23,7 @@ pub fn level_to_string(level: Level) -> String {
   }
 }
 
+/// Converts a log level to its corresponding syslog severity number.
 pub fn level_to_severity(level: Level) -> Int {
   case level {
     Debug -> 7
