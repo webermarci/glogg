@@ -5,7 +5,7 @@ import gleam/option.{type Option, None, Some}
 import gleam/time/duration.{type Duration}
 import glogg/level.{
   type Level, Alert, Critical, Debug, Emergency, Error, Info, Notice, Warning,
-  level_to_string,
+  level_to_severity, level_to_string,
 }
 
 @external(erlang, "logger_ffi", "log")
@@ -33,11 +33,17 @@ pub opaque type Field {
   Int(key: String, value: Int)
   Float(key: String, value: Float)
   Group(key: String, fields: List(Field))
+  Lazy(thunk: fn() -> Field)
   Stacktrace
 }
 
 pub opaque type Logger {
-  Logger(name: String, context: List(Field), hooks: List(HookFn))
+  Logger(
+    name: String,
+    context: List(Field),
+    minimum_level: Option(Level),
+    hooks: List(HookFn),
+  )
 }
 
 /// Creates a new logger.
@@ -50,7 +56,7 @@ pub opaque type Logger {
 /// let my_logger = logger.new("name")
 /// ```
 pub fn new(name: String) -> Logger {
-  Logger(name, [String("logger", name)], [])
+  Logger(name, [String("logger", name)], None, [])
 }
 
 /// Adds context fields to a logger.
@@ -68,12 +74,26 @@ pub fn new(name: String) -> Logger {
 ///   ])
 /// ```
 pub fn with_context(logger: Logger, fields: List(Field)) -> Logger {
-  Logger(logger.name, list.append(logger.context, fields), logger.hooks)
+  Logger(..logger, context: list.append(logger.context, fields))
 }
 
 /// Retrieves the context fields of a logger.
 pub fn get_context(logger: Logger) -> List(Field) {
   logger.context
+}
+
+/// Sets the minimum level for this logger.
+/// Logs below this level are discarded before processing fields.
+///
+/// # Example
+///
+/// ```gleam
+/// let my_logger =
+///   logger.new("name")
+///   |> logger.with_minimum_level(Info)  // Ignore debug logs
+/// ```
+pub fn with_minimum_level(logger: Logger, level: Level) -> Logger {
+  Logger(..logger, minimum_level: Some(level))
 }
 
 /// Adds a hook function to a logger.
@@ -101,12 +121,12 @@ pub fn get_context(logger: Logger) -> List(Field) {
 ///   })
 /// ```
 pub fn add_hook(logger: Logger, hook: HookFn) -> Logger {
-  Logger(logger.name, logger.context, list.append(logger.hooks, [hook]))
+  Logger(..logger, hooks: list.append(logger.hooks, [hook]))
 }
 
 /// Clears all hooks from a logger.
 pub fn clear_hooks(logger: Logger) -> Logger {
-  Logger(logger.name, logger.context, [])
+  Logger(..logger, hooks: [])
 }
 
 /// Logs a message and fields at the `Debug` level.
@@ -216,7 +236,7 @@ pub fn alert(logger: Logger, message: String, fields: List(Field)) {
 ///
 /// ```gleam
 /// my_logger
-/// |> logger.emergency(logger, "Message", [
+/// |> logger.emergency("Message", [
 ///   logger.string("key", "value"),
 ///   logger.stacktrace(),
 /// ])
@@ -281,17 +301,17 @@ pub fn float(key: String, value: Float) -> Field {
   Float(key:, value:)
 }
 
-/// Creates a duration field in milliseconds with the given key and value.
+/// Creates a duration field with the given key and value.
 ///
 /// # Example
 ///
 /// ```gleam
 /// my_logger
 /// |> logger.info("Message", [
-///   logger.duration_ms("key", duration.milliseconds(10)),
+///   logger.duration("key", duration.milliseconds(10)),
 /// ])
 /// ```
-pub fn duration_ms(key: String, duration: Duration) -> Field {
+pub fn duration(key: String, duration: Duration) -> Field {
   Float(key:, value: duration.to_seconds(duration) *. 1000.0)
 }
 
@@ -309,6 +329,22 @@ pub fn duration_ms(key: String, duration: Duration) -> Field {
 /// ```
 pub fn group(key: String, fields: List(Field)) -> Field {
   Group(key:, fields:)
+}
+
+/// Wraps a field to be evaluated only when logging actually occurs.
+///
+/// # Example
+///
+/// ```gleam
+/// logger.debug("Query result", [
+///   logger.string("query", "SELECT ..."),
+///   logger.lazy(fn() {
+///     logger.string("result", expensive_json_encode(data))
+///   }),
+/// ])
+/// ```
+pub fn lazy(thunk: fn() -> Field) -> Field {
+  Lazy(thunk:)
 }
 
 /// Creates a stacktrace field that with the key "stacktrace".
@@ -344,6 +380,13 @@ pub fn fields_to_metadata(fields: List(Field)) -> Dict(String, Dynamic) {
       Float(k, v) -> dict.insert(acc, k, dynamic.float(v))
       Group(k, fs) ->
         dict.insert(acc, k, fields_to_metadata(fs) |> dict_to_dynamic)
+      Lazy(thunk) -> {
+        dict.fold(
+          fields_to_metadata([thunk()]),
+          acc,
+          fn(result_acc, key, value) { dict.insert(result_acc, key, value) },
+        )
+      }
       Stacktrace ->
         dict.insert(
           acc,
@@ -354,23 +397,41 @@ pub fn fields_to_metadata(fields: List(Field)) -> Dict(String, Dynamic) {
   })
 }
 
+fn should_log(minimum_level: Option(Level), level: Level) -> Bool {
+  case minimum_level {
+    None -> True
+    Some(min) -> level_to_severity(level) <= level_to_severity(min)
+  }
+}
+
 fn log(logger: Logger, level: Level, message: String, fields: List(Field)) {
+  case should_log(logger.minimum_level, level) {
+    False -> Nil
+    True -> log_internal(logger, level, message, fields)
+  }
+}
+
+fn apply_hooks(hooks: List(HookFn), event: LogEvent) -> Option(LogEvent) {
+  case hooks {
+    [] -> Some(event)
+    [hook, ..rest] ->
+      case hook(event) {
+        None -> None
+        Some(new_event) -> apply_hooks(rest, new_event)
+      }
+  }
+}
+
+fn log_internal(
+  logger: Logger,
+  level: Level,
+  message: String,
+  fields: List(Field),
+) {
   let all_fields = list.append(logger.context, fields)
   let initial_event = LogEvent(level, message, all_fields)
 
-  let final_event_option =
-    list.fold(
-      over: logger.hooks,
-      from: Some(initial_event),
-      with: fn(maybe_event, hook_fn) {
-        case maybe_event {
-          None -> None
-          Some(event) -> hook_fn(event)
-        }
-      },
-    )
-
-  case final_event_option {
+  case apply_hooks(logger.hooks, initial_event) {
     Some(final_event) -> {
       platform_log(
         level_to_string(final_event.level),

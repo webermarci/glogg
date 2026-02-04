@@ -22,3 +22,16 @@ pub fn level_to_string(level: Level) -> String {
     Emergency -> "emergency"
   }
 }
+
+pub fn level_to_severity(level: Level) -> Int {
+  case level {
+    Debug -> 7
+    Info -> 6
+    Notice -> 5
+    Warning -> 4
+    Error -> 3
+    Critical -> 2
+    Alert -> 1
+    Emergency -> 0
+  }
+}
