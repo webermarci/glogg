@@ -8,6 +8,7 @@ const isNode =
   process.versions != null &&
   process.versions.node != null;
 const isServer = isNode || isDeno || isBun;
+const denoEncoder = isDeno ? new TextEncoder() : null;
 
 const severity = {
   emergency: 0,
@@ -21,35 +22,35 @@ const severity = {
 };
 
 function write(level, data) {
-  const isError =
-    level === "error" ||
-    level === "critical" ||
-    level === "alert" ||
-    level === "emergency";
+  const isError = severity[level] <= severity.error;
 
-  if (isServer) {
-    const jsonString = JSON.stringify(data) + "\n";
+  try {
+    if (isServer) {
+      const jsonString = JSON.stringify(data) + "\n";
 
-    if (isNode || isBun) {
-      const stream = isError ? process.stderr : process.stdout;
-      stream.write(jsonString);
-    } else if (isDeno) {
-      const stream = isError ? Deno.stderr : Deno.stdout;
-      stream.writeSync(new TextEncoder().encode(jsonString));
-    }
-  } else {
-    if (isError) {
-      console.error(data);
-    } else if (level === "warning") {
-      console.warn(data);
-    } else if (level === "info" || level === "notice") {
-      console.info(data);
-    } else if (level === "debug") {
-      console.debug(data);
+      if (isNode || isBun) {
+        const stream = isError ? process.stderr : process.stdout;
+        if (stream.writable) {
+          stream.write(jsonString);
+        }
+      } else if (isDeno) {
+        const stream = isError ? Deno.stderr : Deno.stdout;
+        stream.writeSync(denoEncoder.encode(jsonString));
+      }
     } else {
-      console.log(data);
+      if (isError) {
+        console.error(data);
+      } else if (level === "warning") {
+        console.warn(data);
+      } else if (level === "info" || level === "notice") {
+        console.info(data);
+      } else if (level === "debug") {
+        console.debug(data);
+      } else {
+        console.log(data);
+      }
     }
-  }
+  } catch (err) {}
 }
 
 export function captureStacktrace() {
@@ -104,7 +105,7 @@ export function log(level, message, metadata) {
 
   const filteredHandlers = handlers
     .values()
-    .filter((h) => severity[h.minimum_level] > messageSeverity)
+    .filter((h) => severity[h.minimum_level] >= messageSeverity)
     .toArray();
 
   if (!filteredHandlers.length) {
@@ -114,7 +115,7 @@ export function log(level, message, metadata) {
   const metadataObject = deepGleamDictToObject(metadata);
 
   const data = {
-    time: new Date().getTime() * 1000,
+    time: Date.now() * 1000,
     level: level,
     msg: message,
     ...metadataObject,
